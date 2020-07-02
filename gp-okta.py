@@ -52,7 +52,6 @@ def log(s):
     if verbose:
         print("[INFO] {0}".format(s))
 
-
 def dbg(h, *xs):
     if not verbose:
         return
@@ -147,10 +146,10 @@ def load_conf(cf):
             conf[k] = v.strip()
 
     if len(conf.get("username", "").strip()) == 0:
-        conf["username"] = input("username: ").strip()
+        conf["username"] = input("okta username: ").strip()
 
     if len(conf.get("password", "").strip()) == 0:
-        conf["password"] = getpass.getpass("password: ").strip()
+        conf["password"] = getpass.getpass("okta password: ").strip()
 
     for k in keys:
         if k not in conf:
@@ -689,6 +688,8 @@ def main():
         pcmd = "printf '" + bugs + "{0}'".format(oc_cookie)
 
     if conf.get("execute", "").lower() in ["1", "true"]:
+        if re.match('sudo', cmd):
+          print("[INFO]: openconnect_cmd contains 'sudo', enter your sudo password if prompted.")
         cmd = shlex.split(cmd)
         cmd = [os.path.expandvars(os.path.expanduser(x)) for x in cmd]
         pp = subprocess.Popen(shlex.split(pcmd), stdout=subprocess.PIPE)
