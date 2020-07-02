@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
    The MIT License (MIT)
 
@@ -32,7 +32,11 @@ import signal
 import subprocess
 import sys
 import time
-from urllib.parse import urljoin
+
+if sys.version_info >= (3,):
+  from urllib.parse import urljoin
+else:
+  from urlparse import urljoin
 
 import requests
 from lxml import etree
@@ -46,20 +50,20 @@ def to_b(v):
 
 def log(s):
     if verbose:
-        print(f"[INFO] {s}")
+        print("[INFO] {0}".format(s))
 
 
 def dbg(h, *xs):
     if not verbose:
         return
-    print(f"[DEBUG] {h}:")
+    print("[DEBUG] {0}:".format(h))
     for x in xs:
-        print(f"[DEBUG] {x}")
+        print("[DEBUG] {0}".format(x))
     print("[DEBUG]----------------------------------------------")
 
 
 def err(s):
-    print(f"[ERROR] {s}")
+    print("[ERROR] {0}".format(s))
     sys.exit(1)
 
 
@@ -129,7 +133,7 @@ def load_conf(cf):
                     v = v[1:-1]
 
             conf[k] = v
-            conf[f"{k}.line"] = line_nr
+            conf["{0}.line".format(k)] = line_nr
 
     for k, v in os.environ.items():
         k = k.lower()
@@ -150,10 +154,10 @@ def load_conf(cf):
 
     for k in keys:
         if k not in conf:
-            err(f"missing configuration key: {k}")
+            err("missing configuration key: {0}".format(k))
         else:
             if len(conf[k].strip()) == 0:
-                err(f"empty configuration key: {k}")
+                err("empty configuration key: {0}".format(k))
 
     conf["debug"] = conf.get("debug", "").lower() in ["1", "true"]
 
@@ -172,12 +176,12 @@ def mfa_priority(conf, ftype, fprovider):
     else:
         priority = 0
 
-    value = conf.get(f"{ftype}.{fprovider}")
+    value = conf.get("{0}.{1}".format(ftype, fprovider))
     if ftype == "sms":
         if not (value or "").lower() in ["1", "true"]:
             value = None
 
-    line_nr = conf.get(f"{ftype}.{fprovider}.line", 0)
+    line_nr = conf.get("{0}.{1}.line".format(ftype, fprovider), 0)
 
     if value is None:
         priority += 0
@@ -216,7 +220,7 @@ def get_redirect_url(conf, c, current_url=None):
 
 
 def send_req(conf, s, name, url, data, **kwargs):
-    dbg(conf.get("debug"), f"{name}.request", url)
+    dbg(conf.get("debug"), "{0}.request".format(name), url)
 
     if kwargs.get("get"):
         log("we must send a get")
@@ -235,12 +239,12 @@ def send_req(conf, s, name, url, data, **kwargs):
         r = s.post(url, data=data, headers=headers)
 
     hdump = "\n".join([k + ": " + v for k, v in sorted(r.headers.items())])
-    rr = f"status: {r.status_code}\n\n{hdump}\n\n{r.text}"
+    rr = "status: {0}\n\n{1}\n\n{2}".format(r.status_code, hdump, r.text)
 
     if r.status_code != 200:
         err("okta {0} request failed. {0}".format(rr))
 
-    dbg(conf.get("debug"), f"{name}.response", rr)
+    dbg(conf.get("debug"), "{0}.response".format(name), rr)
 
     if do_json:
         return r.headers, parse_rjson(r)
@@ -420,7 +424,7 @@ def okta_mfa(conf, s, j):
 def okta_mfa_push(conf, s, factor, state_token):
     provider = factor.get("provider", "")
     data = {"factorId": factor.get("id"), "stateToken": state_token}
-    log(f"mfa {provider} push request")
+    log("mfa {0} push request".format(provider))
     status = "MFA_CHALLENGE"
 
     while status == "MFA_CHALLENGE":
@@ -436,11 +440,11 @@ def okta_mfa_push(conf, s, factor, state_token):
 
 def okta_mfa_totp(conf, s, factor, state_token):
     provider = factor.get("provider", "")
-    secret = conf.get(f"totp.{provider}", "") or ""
+    secret = conf.get("totp.{0}".format(provider), "") or ""
     code = None
 
     if len(secret) == 0:
-        code = input(f"{provider} TOTP: ").strip()
+        code = input("{0} TOTP: ".format(provider)).strip()
     else:
         import pyotp
 
@@ -451,7 +455,7 @@ def okta_mfa_totp(conf, s, factor, state_token):
     if len(code) == 0:
         return None
     data = {"factorId": factor.get("id"), "stateToken": state_token, "passCode": code}
-    log(f"mfa {provider} totp request")
+    log("mfa {0} totp request".format(provider))
     _, j = send_req(conf, s, "totp mfa", factor.get("url"), data, json=True)
     return j.get("sessionToken", "").strip()
 
@@ -459,9 +463,9 @@ def okta_mfa_totp(conf, s, factor, state_token):
 def okta_mfa_sms(conf, s, factor, state_token):
     provider = factor.get("provider", "")
     data = {"factorId": factor.get("id"), "stateToken": state_token}
-    log(f"mfa {provider} sms request")
+    log("mfa {0} sms request".format(provider))
     _, j = send_req(conf, s, "sms mfa", factor.get("url"), data, json=True)
-    code = input(f"{provider} SMS verification code: ").strip()
+    code = input("{0} SMS verification code: ").format(provider).strip()
 
     if len(code) == 0:
         return None
@@ -557,7 +561,7 @@ def okta_saml_2(conf, s, saml_xml, again=False):
     r = s.post(url, data=data)
 
     if r.status_code != 200:
-        err(f"redirect request failed. {r}")
+        err("redirect request failed. {0}".format(r))
 
     dbg(conf.get("debug"), "redirect.response", r.status_code, r.text)
     xhtml = parse_html(r.text)
@@ -567,7 +571,7 @@ def okta_saml_2(conf, s, saml_xml, again=False):
     r = s.post(url, data=data)
 
     if r.status_code != 200:
-        err(f"redirect form request failed. {r}")
+        err("redirect form request failed. {0}".provider(r))
 
     dbg(conf.get("debug"), "form.response", r.status_code, r.text)
     saml_username = r.headers.get("saml-username", "").strip()
@@ -624,8 +628,8 @@ def main():
 
         if not decrypted_contents.ok:
             print("failed to decrypt config file:")
-            print(f"    status: {decrypted_contents.status}")
-            print(f"     error: {decrypted_contents.stderr}")
+            print("    status: {0}".format(decrypted_contents.status))
+            print("     error: {0}".format(decrypted_contents.stderr))
             sys.exit(1)
 
         config_contents = decrypted_contents.data
@@ -638,14 +642,14 @@ def main():
 
     redirect_url = okta_saml(conf, s, saml_xml)
     token = okta_auth(conf, s)
-    log(f"sessionToken: {token}")
+    log("sessionToken: {0}".format(token))
 
     saml_username, prelogin_cookie = okta_redirect(conf, s, token, redirect_url)
-    log(f"saml-username: {saml_username}")
-    log(f"prelogin-cookie: {prelogin_cookie}")
+    log("saml-username: {0}".format(saml_username))
+    log("prelogin-cookie: {0}".format(prelogin_cookie))
 
     userauthcookie = paloalto_getconfig(conf, s, saml_username, prelogin_cookie)
-    log(f"portal-userauthcookie: {userauthcookie}")
+    log("portal-userauthcookie: {0}".format(userauthcookie))
 
     # Another dance?
     if conf.get("another_dance", "").lower() in ["1", "true"]:
@@ -655,8 +659,8 @@ def main():
         saml_username, prelogin_cookie = okta_saml_2(conf, s, saml_xml, again=True)
         log("another dance phase 3")
 
-    log(f"saml-username: {saml_username}")
-    log(f"prelogin-cookie: {prelogin_cookie}")
+    log("saml-username: {0}".format(saml_username))
+    log("prelogin-cookie: {0}".format(prelogin_cookie))
 
     if userauthcookie == "empty" and prelogin_cookie != "empty":
         cookie_type = "gateway:prelogin-cookie"
@@ -680,16 +684,16 @@ def main():
     if conf.get("bug.username", "").lower() in ["1", "true"]:
         bugs += "{}\\n".format(username.replace("\\", "\\\\"))
     if len(gw) > 0:
-        pcmd = "printf '" + bugs + f"{oc_cookie}\\n{gw}'"
+        pcmd = "printf '" + bugs + "{0}\\n{1}'".format(oc_cookie, gw)
     else:
-        pcmd = "printf '" + bugs + f"{oc_cookie}'"
+        pcmd = "printf '" + bugs + "{0}'".format(oc_cookie)
 
     if conf.get("execute", "").lower() in ["1", "true"]:
         cmd = shlex.split(cmd)
         cmd = [os.path.expandvars(os.path.expanduser(x)) for x in cmd]
         pp = subprocess.Popen(shlex.split(pcmd), stdout=subprocess.PIPE)
         cp = subprocess.Popen(
-            cmd, stdin=pp.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            cmd, stdin=pp.stdout, stdout=sys.stdout, stderr=sys.stdout
         )
 
         pp.stdout.close()
@@ -705,8 +709,8 @@ def main():
             cp = subprocess.Popen(
                 cmd,
                 stdin=pp.stdout,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=sys.stdout,
+                stderr=sys.stdout
             )
             pp.stdout.close()
             # Do not abort on SIGINT. openconnect will perform proper exit & cleanup
