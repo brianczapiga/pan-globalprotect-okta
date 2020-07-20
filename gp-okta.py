@@ -151,6 +151,8 @@ def load_conf(cf):
     if len(conf.get("password", "").strip()) == 0:
         conf["password"] = getpass.getpass("okta password: ").strip()
 
+    print("check phone for 2fa prompt.")
+
     for k in keys:
         if k not in conf:
             err("missing configuration key: {0}".format(k))
